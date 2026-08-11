@@ -495,17 +495,11 @@ async function fetchDthRecords(){
           });
         }
       } else {
-        // Unrecognized row.type — rather than silently dropping this record,
-        // surface it as a flagged ledger entry so it doesn't vanish, and log
-        // it so a future dev pass can teach fetchDthRecords about this type.
-        console.warn('DTH_RECORDS: unrecognized row type, showing as flagged entry', { id: row.id, type: row.type, data: r });
-        out.push({
-          id: 'dth_'+row.id+'_unknown', srcId: null, readonly: true,
-          customer_name: name, phone, dth_no, type: 'credit', amount: amt,
-          note: '⚠️ Unrecognized type: ' + row.type,
-          source_app: 'DTH Accounts', payment_type: 'cash',
-          created_at: dthDateToIso(r.date) || new Date().toISOString()
-        });
+        // Unrecognized row.type — per your request, don't show a synthetic
+        // "Unknown" entry in the ledger. Just log it so a future dev pass
+        // can teach fetchDthRecords about this type; the record itself is
+        // skipped since it isn't a real customer transaction we recognize.
+        console.warn('DTH_RECORDS: skipped unrecognized row type', { id: row.id, type: row.type, data: r });
       }
     });
     return out;
@@ -566,25 +560,11 @@ async function fetchRechargeRecords(){
         return;
       }
       if (row.type !== 'txn') {
-        // Unrecognized row.type (anything other than 'balance'/'txn') — flag
-        // it in the ledger instead of silently dropping it, and log so a
-        // future dev pass can teach fetchRechargeRecords about this type.
-        const r0 = row.data || {};
-        const amt0 = Number(pick(r0, ['sell','amount']) || 0);
-        if (amt0 <= 0) {
-          console.warn('recharge_records: skipped unrecognized row with zero/blank amount', { id: row.id, type: row.type, data: r0 });
-          return;
-        }
-        console.warn('recharge_records: unrecognized row type, showing as flagged entry', { id: row.id, type: row.type, data: r0 });
-        out.push({
-          id: 'rs_'+row.id+'_unknown', srcId: null, readonly: true,
-          customer_name: pick(r0, ['customerName','customer_name','cust']) || 'Unknown',
-          phone: pick(r0, ['phone','mobile']) || '',
-          type: 'credit', amount: amt0,
-          note: '⚠️ Unrecognized type: ' + row.type,
-          source_app: 'Recharge Shop', payment_type: 'cash',
-          created_at: r0.createdAt ? new Date(Number(r0.createdAt)).toISOString() : new Date().toISOString()
-        });
+        // Unrecognized row.type (anything other than 'balance'/'txn') — per
+        // your request, don't show a synthetic "Unknown" entry in the
+        // ledger. Just log it for debugging and skip; this isn't a real
+        // customer transaction we recognize.
+        console.warn('recharge_records: skipped unrecognized row type', { id: row.id, type: row.type, data: row.data || {} });
         return;
       }
       const r = row.data || {};
