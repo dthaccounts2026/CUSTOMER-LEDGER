@@ -472,7 +472,7 @@ async function fetchDthRecords(){
         });
       } else if (row.type === 'advance') {
         // Balance Held ledger from DTH-Accounts: r.type here is the INNER
-        // add/use flag (not to be confused with the outer row.type==='advance').
+        // add/use/owe flag (not to be confused with the outer row.type==='advance').
         // 'add'  → customer overpaid, shop now owes them → this is a DEBIT
         //          against what the customer owes (can even push the running
         //          balance negative, meaning the shop holds their money).
@@ -480,8 +480,15 @@ async function fetchDthRecords(){
         //          a CREDIT that cancels the earlier debit back out, exactly
         //          the way "Balance Held should go back to zero once used"
         //          needs to look in a running ledger.
+        // 'owe'  → a partial-cash recharge left a shortfall the customer
+        //          still owes (DTH Accounts' processReceivedCash/recordOwed).
+        //          This is money due from the customer, same direction as a
+        //          plain credit sale, so it must be a CREDIT here too — it
+        //          was previously unhandled and silently dropped, which made
+        //          these customers look fully paid in the Ledger even though
+        //          DTH Accounts' own Balance page still showed them owing.
         const balDate = r.date ? dthDateToIso(r.date) : new Date().toISOString();
-        const balNote = r.note || (r.type === 'use' ? 'Balance Held used' : 'Balance Held added');
+        const balNote = r.note || (r.type === 'use' ? 'Balance Held used' : r.type === 'owe' ? 'Credit owed (partial payment)' : 'Balance Held added');
         if (r.type === 'add') {
           out.push({
             id: 'dth_'+row.id+'_baladd', srcId: null, readonly: true,
@@ -494,6 +501,14 @@ async function fetchDthRecords(){
             customer_name: name, phone, dth_no, type: 'credit', amount: amt, note: balNote,
             source_app: 'DTH Accounts', payment_type: 'cash', created_at: balDate
           });
+        } else if (r.type === 'owe') {
+          out.push({
+            id: 'dth_'+row.id+'_owe', srcId: null, readonly: true,
+            customer_name: name, phone, dth_no, type: 'credit', amount: amt, note: balNote,
+            source_app: 'DTH Accounts', payment_type: 'credit', created_at: balDate
+          });
+        } else {
+          console.warn('DTH_RECORDS: skipped unrecognized advance inner type', { id: row.id, innerType: r.type, data: r });
         }
       } else {
         // Unrecognized row.type — per your request, don't show a synthetic
